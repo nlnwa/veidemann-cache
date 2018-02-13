@@ -15,6 +15,7 @@ VOLUME /var/cache/squid
 
 COPY docker-entrypoint.sh /
 COPY log_helper.sh /
+COPY store_id_helper.sh /
 COPY squid.conf /etc/squid/squid.conf.template
 ENTRYPOINT [ "/docker-entrypoint.sh" ]
 CMD [ "squid" ]
