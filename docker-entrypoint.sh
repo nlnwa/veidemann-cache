@@ -21,8 +21,6 @@ if [ "$1" == "squid" ]; then
   /usr/lib/squid/ssl_crtd -c -s /var/lib/ssl_db
   chown -R squid.squid /var/lib/ssl_db
 
-  /usr/lib/squid/ssl_crtd -c -s /var/lib/ssl_db
-
   cat /etc/squid/squid.conf
   exec /sbin/su-exec root /usr/sbin/squid -N
 else
