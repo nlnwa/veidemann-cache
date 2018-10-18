@@ -8,7 +8,7 @@ SQUID_VERSION=$(/usr/sbin/squid -v | grep Version | awk '{ print $4 }')
 if [ "$1" == "squid" ]; then
   echo "Staring squid [${SQUID_VERSION}]"
 
-  sudo /init-squid.sh
+  sudo /init-squid.sh $DNS_SERVERS
   /usr/sbin/squid -N -z
   exec /usr/sbin/squid -NYC
 else

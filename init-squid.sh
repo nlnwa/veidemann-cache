@@ -5,11 +5,11 @@
 # ----------------------------------------------------------------------------
 set -e
 
+DNS_SERVERS=$1
 if [ -n "$DNS_SERVERS" ]; then
   for s in $DNS_SERVERS; do
     export DNS_IP="$(nslookup ${s} | grep "Address 1" | cut -f3 -d' ') ${DNS_IP}"
   done
-  env
 fi
 /usr/bin/envsubst '${DNS_IP}' < /etc/squid/squid.conf.template > /etc/squid/squid.conf
 /bin/chown -R squid:squid /var/cache/squid
