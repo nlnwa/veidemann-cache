@@ -12,6 +12,7 @@ if [ -n "$DNS_SERVERS" ]; then
   done
 fi
 /usr/bin/envsubst '${DNS_IP}' < /etc/squid/squid.conf.template > /etc/squid/squid.conf
+rm -rf /var/cache/squid/*
 /bin/chown -R squid:squid /var/cache/squid
 /bin/chown -R squid:squid /var/log/squid
 /usr/lib/squid/ssl_crtd -c -s /var/lib/ssl_db
