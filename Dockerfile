@@ -1,7 +1,7 @@
 FROM golang:1.11
 COPY go /src
 WORKDIR /src
-RUN ls
+
 RUN CGO_ENABLED=0 go build -o confighandler cmd/confighandler/main.go
 RUN CGO_ENABLED=0 go build -o storeid cmd/storeid/main.go
 RUN CGO_ENABLED=0 go build -o loghelper cmd/loghelper/main.go
@@ -19,7 +19,6 @@ ENV DNS_SERVERS="8.8.8.8 8.8.4.4"
 COPY --from=0 /src/confighandler /usr/bin/
 COPY --from=0 /src/storeid /usr/bin/
 COPY --from=0 /src/loghelper /usr/bin/
-
 
 COPY openssl.conf /
 
