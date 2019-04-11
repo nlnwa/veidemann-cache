@@ -15,20 +15,18 @@ import (
 )
 
 func main() {
-	r := &rewriter{discovery: discover.NewDiscovery()}
+	r := &rewriter{}
 
 	flag.BoolVar(&r.balancer, "b", false, "Set to true to make this node a non-caching load balancing node")
 	flag.Parse()
 
 	if r.balancer {
 		log.Print("Confighandler: Init squid as balancer")
+		r.discovery = discover.NewDiscovery()
 	} else {
 		log.Print("Confighandler: Init squid cache")
 	}
 	r.check()
-
-	log.Print("- - - - - - - - - - - - - - -")
-	log.Print("starting daemon")
 
 	context := &daemon.Context{LogFileName: "/proc/self/fd/2"}
 	child, err := context.Reborn()
@@ -37,11 +35,12 @@ func main() {
 	}
 
 	if child != nil {
+		// This code is run in parent process
 		log.Printf("Confighandler: Init done")
 		return
 	} else {
+		// This code is run in forked child
 		defer context.Release()
-		log.Print("- - - - - - - - - - - - - - -")
 		log.Print("Confighandler: daemon started")
 		for {
 			r.check()
