@@ -3,11 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/nlnwa/veidemann-cache/go/internal/discovery"
+	"github.com/nlnwa/veidemann-cache/go/internal/iputil"
 	"github.com/sevlyar/go-daemon"
 	"io/ioutil"
 	"log"
-	"nlnwa/veidemann-cache/go/discover"
-	"nlnwa/veidemann-cache/go/iputil"
 	"os"
 	"os/exec"
 	"strings"
@@ -21,10 +21,10 @@ func main() {
 	flag.Parse()
 
 	if r.balancer {
-		log.Print("Confighandler: Init squid as balancer")
-		r.discovery = discover.NewDiscovery()
+		log.Print("ConfigHandler: Initialize squid as balancer")
+		r.discovery = discovery.NewDiscovery()
 	} else {
-		log.Print("Confighandler: Init squid cache")
+		log.Print("ConfigHandler: Initialize squid as cache")
 	}
 	r.check()
 
@@ -43,7 +43,10 @@ func main() {
 		defer context.Release()
 		log.Print("Confighandler: daemon started")
 		for {
-			r.check()
+			if err := r.check(); err != nil {
+				log.Println(err)
+				break
+			}
 			time.Sleep(5 * time.Second)
 		}
 	}
@@ -52,33 +55,41 @@ func main() {
 type rewriter struct {
 	lastParents    string
 	lastDnsServers string
-	discovery      *discover.Discovery
+	discovery      *discovery.Discovery
 	balancer       bool
 }
 
-func (r *rewriter) check() {
-	parents := ""
+func (r *rewriter) check() error {
+	peers := ""
 	if r.balancer {
-		parents = r.getParentsString()
+		var err error
+		peers, err = r.getPeers()
+		if err != nil {
+			return fmt.Errorf("failed to get peers: %w", err)
+		}	
 	}
 	dnsServers := r.getDnsServersString()
 
-	if parents != r.lastParents || dnsServers != r.lastDnsServers {
-		conf := r.rewriteConfig(dnsServers, parents)
+	if peers != r.lastParents || dnsServers != r.lastDnsServers {
+		conf := r.rewriteConfig(dnsServers, peers)
 		r.writeConfig(conf)
 	}
 
-	r.lastParents = parents
+	r.lastParents = peers
 	r.lastDnsServers = dnsServers
+	return nil
 }
 
-func (r *rewriter) getParentsString() string {
-	s := r.discovery.GetSiblings()
-	var siblings string
-	for _, a := range s {
-		siblings += fmt.Sprintf("cache_peer %v parent 3128 0 carp no-digest\n", a)
+func (r *rewriter) getPeers() (string, error) {
+	children, err := r.discovery.GetPeers()
+	if err != nil {
+		return "", err
 	}
-	return siblings
+	var peers string
+	for _, child := range children {
+		peers += fmt.Sprintf("cache_peer %v parent 3128 0 carp no-digest\n", child)
+	}
+	return peers, nil
 }
 
 func (r *rewriter) getDnsServersString() string {

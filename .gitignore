@@ -1,1 +1,5 @@
 .idea
+
+/go/confighandler
+/go/loghelper
+/go/storeid
