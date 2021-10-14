@@ -1,6 +1,6 @@
 FROM golang:1.16-alpine as helpers
 
-WORKDIR /go/src
+WORKDIR /go/src/helpers
 
 COPY go/go.mod go/go.sum ./
 RUN go mod download
