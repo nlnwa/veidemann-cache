@@ -9,21 +9,21 @@ import (
 	"strings"
 )
 
-const thread_count = 5
+const ThreadCount = 5
 
 func main() {
-	i := make(chan string)
-	o := make(chan string)
+	i := make(chan string, ThreadCount)
 
-	log.Printf("Starting storeid with %v threads", thread_count)
-	go writeOutput(o)
-	for j := 0; j < thread_count; j++ {
-		go rewriter(i, o)
+	log.Printf("Starting StoreID helper using %v threads", ThreadCount)
+
+	for j := 0; j < ThreadCount; j++ {
+		go func() {
+			for s := range i {
+				fmt.Print(rewrite(s))
+			}
+		}()
 	}
-	scanInput(i)
-}
 
-func scanInput(i chan string) {
 	r := bufio.NewReader(os.Stdin)
 	for {
 		l, err := r.ReadString('\n')
@@ -31,26 +31,18 @@ func scanInput(i chan string) {
 			if err == io.EOF {
 				return
 			}
-			log.Print("Error reading input")
+			panic(err)
+		} else {
+			i <- l
 		}
-		i <- l
 	}
 }
 
-func writeOutput(o chan string) {
-	for s := range o {
-		fmt.Print(s)
-	}
-}
-
-func rewriter(i chan string, o chan string) {
-	for s := range i {
-		o <- rewrite(s)
-	}
-}
-
+// rewrite matches lines for each requested URL with the
+//
+// see http://www.squid-cache.org/Doc/config/store_id_program/
 func rewrite(s string) string {
-	l := strings.Trim(s, " \t\r\n")
+	l := strings.TrimSpace(s)
 
 	var (
 		res       string
@@ -73,6 +65,5 @@ func rewrite(s string) string {
 		res = extras + url
 	}
 
-	log.Printf("CHANNEL: %s, STORE ID: %s", channelId, res)
 	return fmt.Sprintf("%s OK store-id=\"%s\"\n", channelId, res)
 }

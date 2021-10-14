@@ -17,12 +17,12 @@ func main() {
 			if err == io.EOF {
 				return
 			}
-			log.Print("Error reading input")
+			log.Printf("LogHelper: error reading input: %v", err)
 		}
 		l = strings.Trim(l, " \t\n\r")
 		if strings.HasPrefix(l, "L") {
 			l = l[1:]
-			fmt.Fprintln(os.Stderr, l)
+			_, _ = fmt.Fprintln(os.Stderr, l)
 		}
 	}
 }
