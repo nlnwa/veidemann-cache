@@ -1,24 +1,23 @@
-FROM golang:1.11
-COPY go /src
-WORKDIR /src
+FROM golang:1.16-alpine as helpers
 
-RUN CGO_ENABLED=0 go build -o confighandler cmd/confighandler/main.go
-RUN CGO_ENABLED=0 go build -o storeid cmd/storeid/main.go
-RUN CGO_ENABLED=0 go build -o loghelper cmd/loghelper/main.go
+WORKDIR /go/src
+
+COPY go/go.mod go/go.sum ./
+RUN go mod download
+
+COPY go ./
+RUN CGO_ENABLED=0 go install ./...
 
 
+FROM alpine:3.14.2
 
-FROM alpine:3.9.2
 
-EXPOSE 3128 3129 4827
 
 RUN apk add --no-cache squid openssl ca-certificates sudo gettext iptables ip6tables iproute2 && rm -rf /var/cache/apk/*
 
-ENV DNS_SERVERS="8.8.8.8 8.8.4.4"
-
-COPY --from=0 /src/confighandler /usr/bin/
-COPY --from=0 /src/storeid /usr/bin/
-COPY --from=0 /src/loghelper /usr/bin/
+COPY --from=helpers /go/bin/confighandler /usr/bin/
+COPY --from=helpers /go/bin/storeid /usr/bin/
+COPY --from=helpers /go/bin/loghelper /usr/bin/
 
 COPY openssl.conf /
 
@@ -44,12 +43,17 @@ VOLUME /var/cache/squid
 
 COPY init-squid.sh /
 COPY docker-entrypoint.sh /
-COPY squid.conf /etc/squid/squid.conf.template
+COPY squid.conf /etc/squid/squid.conf
 COPY squid-balancer.conf /etc/squid/squid-balancer.conf.template
 
 USER squid
 
 ENV SERVICE_NAME="veidemann-cache"
+ENV DNS_SERVERS="8.8.8.8 8.8.4.4"
+# cache dir size should be no more than 80% of volume space (/var/cache/squid) size
+ENV CACHE_DIR_MB=100
+
+EXPOSE 3128 3129 4827
 
 ENTRYPOINT [ "/docker-entrypoint.sh" ]
 CMD [ "squid" ]
