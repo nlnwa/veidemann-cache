@@ -54,17 +54,16 @@ func (d *Discovery) GetPeers() ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get service named %s: %w", d.serviceName, err)
 	}
-	eps, err := d.kube.DiscoveryV1().EndpointSlices(d.ns).List(ctx, metaV1.ListOptions{
-		LabelSelector: labels.Set(service.Spec.Selector).AsSelector().String(),
-	})
+	set := labels.Set(service.Spec.Selector)
+	epl, err := d.kube.CoreV1().Endpoints(d.ns).List(ctx, metaV1.ListOptions{LabelSelector: set.AsSelector().String()})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get endpoints for service named %s: %w", d.serviceName, err)
+		return nil, fmt.Errorf("failed to list endpoints for service: %s: %w", d.serviceName, err)
 	}
 
-	for _, ep := range eps.Items {
-		for _, ss := range ep.Endpoints {
+	for _, eps := range epl.Items {
+		for _, ss := range eps.Subsets {
 			for _, a := range ss.Addresses {
-				peers = append(peers, a)
+				peers = append(peers, a.IP)
 			}
 		}
 	}
