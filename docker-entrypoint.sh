@@ -14,6 +14,9 @@ if [ "$1" = "squid" ]; then
   # start confighandler daemon
   sudo confighandler "$@" || exit 1
 
+  # give confighandler time to do it's initial config rewrite
+  sleep 1
+
   # create cache dir
   /usr/sbin/squid -N -z
 
