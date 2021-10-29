@@ -17,32 +17,32 @@ type Discovery struct {
 	kube        *kubernetes.Clientset
 }
 
-func NewDiscovery() *Discovery {
+func NewDiscovery() (*Discovery, error) {
 	// creates the in-cluster config
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	// creates the clientset
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	serviceName, ok := os.LookupEnv("SERVICE_NAME")
 	if !ok {
-		panic("failed to lookup env SERVICE_NAME")
+		return nil, fmt.Errorf("failed to lookup env SERVICE_NAME")
 	}
 	namespace, ok := os.LookupEnv("NAMESPACE")
 	if !ok {
-		panic("failed to lookup environment variable NAMESPACE")
+		return nil, fmt.Errorf("failed to lookup environment variable NAMESPACE")
 	}
 
 	return &Discovery{
 		ns:          namespace,
 		serviceName: serviceName,
 		kube:        clientset,
-	}
+	}, nil
 }
 
 func (d *Discovery) GetParents() ([]string, error) {
