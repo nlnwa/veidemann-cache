@@ -2,21 +2,22 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"strings"
 )
 
-const ThreadCount = 5
-
 func main() {
-	i := make(chan string, ThreadCount)
+	threadCount := 5
 
-	log.Printf("Starting StoreID helper using %v threads", ThreadCount)
+	flag.IntVar(&threadCount, "t", threadCount, "Set number of threads")
+	flag.Parse()
 
-	for j := 0; j < ThreadCount; j++ {
+	i := make(chan string, threadCount)
+
+	for j := 0; j < threadCount; j++ {
 		go func() {
 			for s := range i {
 				fmt.Print(rewrite(s))
@@ -32,9 +33,8 @@ func main() {
 				return
 			}
 			panic(err)
-		} else {
-			i <- l
 		}
+		i <- l
 	}
 }
 
