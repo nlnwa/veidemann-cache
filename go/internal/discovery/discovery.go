@@ -45,11 +45,11 @@ func NewDiscovery() *Discovery {
 	}
 }
 
-func (d *Discovery) GetPeers() ([]string, error) {
+func (d *Discovery) GetParents() ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	var peers []string
+	var parents []string
 	service, err := d.kube.CoreV1().Services(d.ns).Get(ctx, d.serviceName, metaV1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get service named %s: %w", d.serviceName, err)
@@ -63,9 +63,9 @@ func (d *Discovery) GetPeers() ([]string, error) {
 	for _, eps := range epl.Items {
 		for _, ss := range eps.Subsets {
 			for _, a := range ss.Addresses {
-				peers = append(peers, a.IP)
+				parents = append(parents, a.IP)
 			}
 		}
 	}
-	return peers, nil
+	return parents, nil
 }
