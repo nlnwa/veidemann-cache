@@ -41,7 +41,7 @@ func main() {
 		log.Fatalf("[ConfigHandler] Failed to initialize configuration: %v", err)
 	}
 
-	context := &daemon.Context{LogFileName: "/proc/self/fd/2"}
+	context := &daemon.Context{LogFileName: "/dev/stderr"}
 	child, err := context.Reborn()
 	if err != nil {
 		log.Fatalf("[ConfigHandler] Failed to create daemon process: %v", err)

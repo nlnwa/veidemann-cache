@@ -78,15 +78,15 @@ pid_filename /var/run/squid/squid.pid
 # ---------------------
 debug_options ALL,0
 log_mime_hdrs off
-access_log stdio:/proc/self/fd/1
-cache_log stdio:/proc/self/fd/2
-cache_store_log stdio:/proc/self/fd/2
+access_log stdio:/dev/stdout
+cache_log stdio:/dev/stderr
+cache_store_log stdio:/dev/stderr
 
 # Cache settings
 # --------------------
 store_id_program /usr/bin/storeid -t 20
 store_id_extras "%{veidemann_jeid}>h"
-store_id_children 20 startup=5 idle=5 concurrency=20 on-persistent-overload=ERR
+store_id_children 20 startup=5 idle=5 concurrency=20
 
 cache_miss_revalidate off
 negative_ttl 100 day
@@ -98,12 +98,6 @@ offline_mode on
 
 # Refresh patterns
 refresh_pattern .               4320    100%    4320 store-stale override-expire override-lastmod ignore-private ignore-reload ignore-no-store
-# refresh_pattern ^ftp:           1440    20%     10080
-# refresh_pattern ^gopher:        1440    0%      1440
-# refresh_pattern -i (/cgi-bin/|\?) 0     0%      0
-# refresh_pattern .               0       20%     4320
-
-
 
 # Manipulate headers
 # ----------------------
