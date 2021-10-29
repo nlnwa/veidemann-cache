@@ -9,27 +9,31 @@ COPY go ./
 RUN CGO_ENABLED=0 go install ./...
 
 
-FROM alpine:3.14.2
+FROM alpine:20210804 as certificates
 
+RUN apk add --no-cache openssl ca-certificates
 
+COPY openssl.conf /
 
-RUN apk add --no-cache squid openssl ca-certificates sudo gettext iptables ip6tables iproute2 && rm -rf /var/cache/apk/*
+# Make a self-signed certificate to satisfy the requirements of the Squid config
+RUN openssl ecparam -name prime256v1 -out ec.param \
+ && openssl req -new -newkey ec:ec.param -days 1825 -nodes -x509 -sha384 \
+      -config openssl.conf \
+      -keyout cache-selfsigned.key \
+      -out cache-selfsignedCA.crt \
+      -subj "/O=Veidemann harvester/OU=Veidemann cache/CN=veidemann-harvester"
+
+FROM alpine:20210804
+
+RUN apk add --no-cache squid tini ca-certificates sudo gettext iptables ip6tables iproute2 && rm -rf /var/cache/apk/*
 
 COPY --from=helpers /go/bin/confighandler /usr/bin/
 COPY --from=helpers /go/bin/storeid /usr/bin/
 COPY --from=helpers /go/bin/loghelper /usr/bin/
 
-COPY openssl.conf /
-
-# Make a self-signed certificate to satisfy the requirements of the Squid config
-RUN mkdir /ca-certificates \
- && openssl ecparam -name prime256v1 -out /ca-certificates/ec.param \
- && openssl req -new -newkey ec:/ca-certificates/ec.param -days 1825 -nodes -x509 -sha384 \
-      -config openssl.conf \
-      -keyout /ca-certificates/cache-selfsigned.key \
-      -out /ca-certificates/cache-selfsignedCA.crt \
-      -subj "/O=Veidemann harvester/OU=Veidemann cache/CN=veidemann-harvester" \
- && chmod -R 777 /ca-certificates
+COPY --from=certificates --chown=squid:squid /ec.param /ca-certificates/
+COPY --from=certificates --chown=squid:squid /cache-selfsigned.key /ca-certificates/
+COPY --from=certificates --chown=squid:squid /cache-selfsignedCA.crt /ca-certificates/
 
 RUN echo "Cmnd_Alias CMDS = /init-squid.sh, /usr/bin/confighandler" >> /etc/sudoers.d/squid && \
     echo "squid ALL=(ALL) NOPASSWD: CMDS" >> /etc/sudoers.d/squid && \
@@ -43,17 +47,14 @@ VOLUME /var/cache/squid
 
 COPY init-squid.sh /
 COPY docker-entrypoint.sh /
-COPY squid.conf /etc/squid/squid.conf
-COPY squid-balancer.conf /etc/squid/squid-balancer.conf.template
+COPY squid.conf.template /etc/squid/
+COPY squid-balancer.conf.template /etc/squid/
 
 USER squid
 
 ENV SERVICE_NAME="veidemann-cache"
 ENV DNS_SERVERS="8.8.8.8 8.8.4.4"
-# cache dir size should be no more than 80% of volume space (/var/cache/squid) size
-ENV CACHE_DIR_MB=100
 
 EXPOSE 3128 3129 4827
 
-ENTRYPOINT [ "/docker-entrypoint.sh" ]
-CMD [ "squid" ]
+ENTRYPOINT [ "/sbin/tini", "--", "/docker-entrypoint.sh" ]

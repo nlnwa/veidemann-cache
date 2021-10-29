@@ -5,23 +5,19 @@
 set -e
 
 SQUID_VERSION=$(/usr/sbin/squid -v | grep Version | awk '{ print $4 }')
-if [ "$1" = "squid" ]; then
-  shift
 
-  # initialize squid
-  sudo CACHE_DIR_MB="${CACHE_DIR_MB:-100}" /init-squid.sh
+sudo /init-squid.sh
 
-  # start confighandler daemon
-  sudo confighandler "$@" || exit 1
+# start confighandler daemon
+sudo confighandler "$@" || exit 1
 
-  # give confighandler time to do it's initial config rewrite
-  sleep 1
+# create cache dir
+# -N        Master process runs in foreground and is a worker. No kids.
+# -z        Create missing swap directories and then exit.
+/usr/sbin/squid -N -z
 
-  # create cache dir
-  /usr/sbin/squid -N -z
+# -N        Master process runs in foreground and is a worker. No kids.
+# -Y        Only return UDP_HIT or UDP_MISS_NOFETCH during fast reload.
+# -C        Do not catch fatal signals.
+exec /usr/sbin/squid -NYC
 
-  echo "Starting squid [${SQUID_VERSION}]"
-  exec /usr/sbin/squid -NYC
-else
-  exec "$@"
-fi
