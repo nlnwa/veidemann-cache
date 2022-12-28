@@ -17,14 +17,13 @@ forward_max_tries 10
 workers 1
 
 # SSL-Bump (see https://wiki.squid-cache.org/ConfigExamples/Intercept/SslBumpExplicit)
-http_port 3128 ssl-bump generate-host-certificates=on dynamic_cert_mem_cache_size=4MB tls-cert=/ca-certificates/cache-selfsignedCA.crt tls-key=/ca-certificates/cache-selfsigned.key tls-dh=prime256v1:/ca-certificates/ec.param cipher=ECDHE-ECDSA-AES256-GCM-SHA384
+http_port 3128 ssl-bump generate-host-certificates=on dynamic_cert_mem_cache_size=4MB tls-cert=/ca-certificates/cache-selfsignedCA.crt tls-key=/ca-certificates/cache-selfsigned.key tls-dh=/ca-certificates/dh4096.pem cipher=ECDHE-ECDSA-AES256-GCM-SHA384
 
 acl step1 at_step SslBump1
 ssl_bump peek step1
 ssl_bump bump all
-
 sslcrtd_program /usr/lib/squid/security_file_certgen -s /var/lib/ssl_db -M 4MB
-
+ssl_bump server_first all
 sslproxy_cert_error allow all
 
 # ACL configuration
