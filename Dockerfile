@@ -22,20 +22,15 @@ RUN certtool --generate-privkey --outfile ca-key.pem \
 FROM debian:bullseye-20221219-slim
 
 RUN apt-get update && apt-get install -y \
-    squid tini ca-certificates sudo \
+    sudo squid-openssl tini ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=helpers /go/bin/confighandler /usr/bin/
-COPY --from=helpers /go/bin/storeid /usr/bin/
-COPY --from=helpers /go/bin/loghelper /usr/bin/
+COPY --from=helpers /go/bin/confighandler /go/bin/storeid /go/bin/loghelper /usr/local/sbin/
+COPY --from=certificates --chown=proxy:proxy /dhparams.pem /ca-key.pem /ca-cert.pem /ca-certificates/
 
-COPY --from=certificates --chown=squid:squid /dhparams.pem /ca-certificates/
-COPY --from=certificates --chown=squid:squid /ca-key.pem /ca-certificates/
-COPY --from=certificates --chown=squid:squid /ca-cert.pem /ca-certificates/
-
-RUN echo "squid ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/squid && \
-    echo "Defaults:squid !requiretty, !env_reset" >> /etc/sudoers.d/squid && \
-    chmod 440 /etc/sudoers.d/squid
+RUN echo "proxy ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/proxy && \
+    echo "Defaults:proxy !requiretty, !env_reset" >> /etc/sudoers.d/proxy && \
+    chmod 440 /etc/sudoers.d/proxy
 
 # Use this mount to bring your own certificates
 VOLUME /ca-certificates
