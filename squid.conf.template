@@ -5,7 +5,7 @@
 # common settings
 # ---------------
 dns_nameservers ${DNS_IP}
-logfile_daemon /usr/bin/loghelper
+logfile_daemon /usr/local/sbin/loghelper
 
 # cache dir size should be no more than 80% of volume space (/var/cache/squid) size
 cache_dir aufs /var/cache/squid 750 16 256 # Size: 750MB, First level dirs: 16, Second level dirs: 256
@@ -49,6 +49,7 @@ acl Safe_ports port 280         # http-mgmt
 acl Safe_ports port 488         # gss-http
 acl Safe_ports port 591         # filemaker
 acl Safe_ports port 777         # multiling http
+acl CONNECT method CONNECT
 
 # ACLs to target for logging
 acl success_codes http_status 100-199 # informational
@@ -83,7 +84,7 @@ cache_store_log stdio:/dev/stderr
 
 # Cache settings
 # --------------------
-store_id_program /usr/bin/storeid -t 20
+store_id_program /usr/local/sbin/storeid -t 20
 store_id_extras "%{veidemann_jeid}>h"
 store_id_children 20 startup=5 idle=5 concurrency=20
 
