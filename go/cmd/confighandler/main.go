@@ -18,7 +18,7 @@ import (
 func main() {
 	r := new(rewriter)
 
-	logger := log.New(os.Stderr, "ConfigHandler", log.Ldate | log.Ltime | log.LUTC | log.Lmsgprefix)
+	logger := log.New(os.Stderr, "[ConfigHandler] ", log.Ldate|log.Ltime|log.LUTC|log.Lmsgprefix)
 
 	flag.BoolVar(&r.balancer, "b", false, "Set to true to configure squid as balancer")
 	flag.Parse()

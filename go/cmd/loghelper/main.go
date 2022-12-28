@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	logger := log.New(os.Stderr, "LogHelper", log.Ldate | log.Ltime | log.LUTC | log.Lmsgprefix)
+	logger := log.New(os.Stderr, "[LogHelper] ", log.Ldate|log.Ltime|log.LUTC|log.Lmsgprefix)
 
 	r := bufio.NewReader(os.Stdin)
 	for {
@@ -19,7 +19,7 @@ func main() {
 			if err == io.EOF {
 				return
 			}
-			logger.Printf("LogHelper: error reading input: %v", err)
+			logger.Println(err)
 		}
 		l = strings.Trim(l, " \t\n\r")
 		if strings.HasPrefix(l, "L") {

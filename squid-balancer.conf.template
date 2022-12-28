@@ -5,7 +5,7 @@
 # common settings
 # ---------------
 dns_nameservers ${DNS_IP}
-logfile_daemon /usr/bin/loghelper
+logfile_daemon /usr/local/sbin/loghelper
 
 http_port 3128
 forward_max_tries 10
@@ -44,6 +44,7 @@ acl Safe_ports port 280         # http-mgmt
 acl Safe_ports port 488         # gss-http
 acl Safe_ports port 591         # filemaker
 acl Safe_ports port 777         # multiling http
+acl CONNECT method CONNECT
 
 # ACLs to target for logging
 acl success_codes http_status 100-199 # informational
