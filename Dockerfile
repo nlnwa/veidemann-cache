@@ -22,7 +22,7 @@ EOF
 
 RUN <<EOF
 certtool --generate-privkey --outfile ca-key.pem
-certtool --generate-self-signed --load-privkey ca-key.pem --template cert.cfg --outfile myCA.pem
+certtool --generate-self-signed --load-privkey ca-key.pem --template cert.cfg --outfile ca-cert.pem
 certtool --generate-dh-params --sec-param medium > dhparams.pem
 EOF
 
@@ -36,7 +36,7 @@ COPY --from=helpers /go/bin/loghelper /usr/bin/
 
 COPY --from=certificates --chown=squid:squid /dhparams.pem /ca-certificates/
 COPY --from=certificates --chown=squid:squid /ca-key.pem /ca-certificates/
-COPY --from=certificates --chown=squid:squid /myCA.pem /ca-certificates/
+COPY --from=certificates --chown=squid:squid /ca-cert.pem /ca-certificates/
 
 RUN echo "squid ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/squid && \
     echo "Defaults:squid !requiretty, !env_reset" >> /etc/sudoers.d/squid && \
