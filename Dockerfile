@@ -1,4 +1,4 @@
-FROM golang:1.16-alpine as helpers
+FROM golang:1.19-alpine as helpers
 
 WORKDIR /go/src/helpers
 
@@ -9,21 +9,24 @@ COPY go ./
 RUN CGO_ENABLED=0 go install ./...
 
 
-FROM alpine:20210804 as certificates
+FROM alpine:3.17 as certificates
 
-RUN apk add --no-cache openssl ca-certificates
+RUN apk add --no-cache gnutls-utils
 
-COPY openssl.conf /
+COPY <<EOF cert.cfg
+organization = "Veidemann Harvester"
+unit = "Veidemann Cache"
+cn = "veidemann-harvester"
+ca
+EOF
 
-# Make a self-signed certificate to satisfy the requirements of the Squid config
-RUN openssl ecparam -name prime256v1 -out ec.param \
- && openssl req -new -newkey ec:ec.param -days 1825 -nodes -x509 -sha384 \
-      -config openssl.conf \
-      -keyout cache-selfsigned.key \
-      -out cache-selfsignedCA.crt \
-      -subj "/O=Veidemann harvester/OU=Veidemann cache/CN=veidemann-harvester"
+RUN <<EOF
+certtool --generate-privkey --outfile ca-key.pem
+certtool --generate-self-signed --load-privkey ca-key.pem --template cert.cfg --outfile myCA.pem
+certtool --generate-dh-params --sec-param medium > dhparams.pem
+EOF
 
-FROM alpine:20210804
+FROM alpine:3.17
 
 RUN apk add --no-cache squid tini ca-certificates sudo gettext iptables ip6tables iproute2 && rm -rf /var/cache/apk/*
 
@@ -31,12 +34,11 @@ COPY --from=helpers /go/bin/confighandler /usr/bin/
 COPY --from=helpers /go/bin/storeid /usr/bin/
 COPY --from=helpers /go/bin/loghelper /usr/bin/
 
-COPY --from=certificates --chown=squid:squid /ec.param /ca-certificates/
-COPY --from=certificates --chown=squid:squid /cache-selfsigned.key /ca-certificates/
-COPY --from=certificates --chown=squid:squid /cache-selfsignedCA.crt /ca-certificates/
+COPY --from=certificates --chown=squid:squid /dhparams.pem /ca-certificates/
+COPY --from=certificates --chown=squid:squid /ca-key.pem /ca-certificates/
+COPY --from=certificates --chown=squid:squid /myCA.pem /ca-certificates/
 
-RUN echo "Cmnd_Alias CMDS = /init-squid.sh, /usr/bin/confighandler" >> /etc/sudoers.d/squid && \
-    echo "squid ALL=(ALL) NOPASSWD: CMDS" >> /etc/sudoers.d/squid && \
+RUN echo "squid ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers.d/squid && \
     echo "Defaults:squid !requiretty, !env_reset" >> /etc/sudoers.d/squid && \
     chmod 440 /etc/sudoers.d/squid
 
@@ -45,7 +47,6 @@ VOLUME /ca-certificates
 
 VOLUME /var/cache/squid
 
-COPY init-squid.sh /
 COPY docker-entrypoint.sh /
 COPY squid.conf.template /etc/squid/
 COPY squid-balancer.conf.template /etc/squid/
