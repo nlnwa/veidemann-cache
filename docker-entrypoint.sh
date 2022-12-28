@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # ----------------------------------------------------------------------------
 # entrypoint for squid container
 # ----------------------------------------------------------------------------
@@ -15,10 +15,13 @@ sudo chown -R squid:squid /var/lib/ssl_db
 # Start confighandler daemon
 sudo confighandler "$@"
 
+
 # Create cache dir
 # -N        Master process runs in foreground and is a worker. No kids.
 # -z        Create missing swap directories and then exit.
 /usr/sbin/squid -N -z
+
+ulimit -n "${MAX_OPEN_FILES:-65535}"
 
 # Start squid
 # -N        Master process runs in foreground and is a worker. No kids.

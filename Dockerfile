@@ -18,6 +18,7 @@ RUN certtool --generate-privkey --outfile ca-key.pem \
     && certtool --generate-self-signed --load-privkey ca-key.pem --template cert.cfg --outfile ca-cert.pem \
     && certtool --generate-dh-params --sec-param medium > dhparams.pem
 
+
 FROM debian:bullseye-20221219-slim
 
 RUN apt-get update && apt-get install -y \
@@ -45,7 +46,7 @@ COPY docker-entrypoint.sh /
 COPY squid.conf.template /etc/squid/
 COPY squid-balancer.conf.template /etc/squid/
 
-USER squid
+USER proxy
 
 ENV SERVICE_NAME="veidemann-cache"
 ENV DNS_SERVERS="8.8.8.8 8.8.4.4"
