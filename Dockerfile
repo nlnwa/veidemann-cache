@@ -18,9 +18,11 @@ RUN certtool --generate-privkey --outfile ca-key.pem \
     && certtool --generate-self-signed --load-privkey ca-key.pem --template cert.cfg --outfile ca-cert.pem \
     && certtool --generate-dh-params --sec-param medium > dhparams.pem
 
-FROM alpine:3.17
+FROM debian:bullseye-20221219-slim
 
-RUN apk add --no-cache squid tini ca-certificates sudo gettext iptables ip6tables iproute2 && rm -rf /var/cache/apk/*
+RUN apt-get update && apt-get install -y \
+    squid tini ca-certificates sudo \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=helpers /go/bin/confighandler /usr/bin/
 COPY --from=helpers /go/bin/storeid /usr/bin/
