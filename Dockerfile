@@ -13,18 +13,10 @@ FROM alpine:3.17 as certificates
 
 RUN apk add --no-cache gnutls-utils
 
-COPY <<EOF /cert.cfg
-organization = "Veidemann Harvester"
-unit = "Veidemann Cache"
-cn = "veidemann-harvester"
-ca
-EOF
-
-RUN <<EOF
-certtool --generate-privkey --outfile ca-key.pem
-certtool --generate-self-signed --load-privkey ca-key.pem --template cert.cfg --outfile ca-cert.pem
-certtool --generate-dh-params --sec-param medium > dhparams.pem
-EOF
+COPY cert.cfg /
+RUN certtool --generate-privkey --outfile ca-key.pem \
+    && certtool --generate-self-signed --load-privkey ca-key.pem --template cert.cfg --outfile ca-cert.pem \
+    && certtool --generate-dh-params --sec-param medium > dhparams.pem
 
 FROM alpine:3.17
 
