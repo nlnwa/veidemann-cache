@@ -48,4 +48,4 @@ ENV DNS_SERVERS="8.8.8.8 8.8.4.4"
 
 EXPOSE 3128 3129 4827
 
-ENTRYPOINT [ "/sbin/tini", "--", "/docker-entrypoint.sh" ]
+ENTRYPOINT [ "/usr/bin/tini", "--", "/docker-entrypoint.sh" ]
