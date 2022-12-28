@@ -13,7 +13,7 @@ FROM alpine:3.17 as certificates
 
 RUN apk add --no-cache gnutls-utils
 
-COPY <<EOF cert.cfg
+COPY <<EOF /cert.cfg
 organization = "Veidemann Harvester"
 unit = "Veidemann Cache"
 cn = "veidemann-harvester"
