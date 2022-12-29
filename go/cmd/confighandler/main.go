@@ -3,69 +3,72 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/nlnwa/veidemann-cache/go/internal/discovery"
-	"github.com/nlnwa/veidemann-cache/go/internal/iputil"
-	"github.com/sevlyar/go-daemon"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/nlnwa/veidemann-cache/go/discovery"
+	"github.com/nlnwa/veidemann-cache/go/iputil"
+	"github.com/sevlyar/go-daemon"
 )
 
 func main() {
 	r := new(rewriter)
 
+	logger := log.New(os.Stderr, "[ConfigHandler] ", log.Ldate|log.Ltime|log.LUTC|log.Lmsgprefix)
+
 	flag.BoolVar(&r.balancer, "b", false, "Set to true to configure squid as balancer")
 	flag.Parse()
 
 	// configure rewriter
-	r.configPath = "/etc/squid/squid.conf"
+	r.configPath = "/etc/squid/conf.d/veidemann.conf"
 	if r.balancer {
-		log.Print("Configuring squid as balancer")
+		logger.Print("Configuring squid as balancer")
 		r.templatePath = "/etc/squid/squid-balancer.conf.template"
 		if d, err := discovery.NewDiscovery(); err != nil {
-			log.Fatalf("[ConfigHandler] Failed to initialize discovery: %v", err)
+			logger.Fatalf("Failed to initialize discovery: %v", err)
 		} else {
 			r.discovery = d
 		}
 	} else {
-		log.Println("Configuring squid as cache")
+		logger.Println("Configuring squid as cache")
 		r.templatePath = "/etc/squid/squid.conf.template"
 	}
 
 	// initial config rewrite
 	// Note: this will run twice (both in the parent and the child process)
 	if err := r.rewriteConfig(); err != nil {
-		log.Fatalf("[ConfigHandler] Failed to initialize configuration: %v", err)
+		logger.Fatalf("Failed to initialize configuration: %v", err)
 	}
 
 	context := &daemon.Context{LogFileName: "/dev/stderr"}
 	child, err := context.Reborn()
 	if err != nil {
-		log.Fatalf("[ConfigHandler] Failed to create daemon process: %v", err)
+		logger.Fatalf("Failed to create daemon process: %v", err)
 	}
 
 	if child != nil {
 		// This code is run in parent process
-		log.Printf("[ConfigHandler] Configuration initialized (%s)", r.configPath)
+		logger.Printf("Configuration initialized (%s)", r.configPath)
 	} else {
 		// This code is run in forked child
-		log.Println("[ConfigHandler] Daemon started")
+		logger.Println("Daemon started")
 		defer func() {
 			_ = context.Release()
-			log.Println("[ConfigHandler] Daemon stopped")
+			logger.Println("Daemon stopped")
 		}()
 		for {
 			time.Sleep(5 * time.Second)
 			if err := r.rewriteConfig(); err != nil {
-				log.Printf("[ConfigHandler] Failed to rewrite configuration: %v", err)
+				logger.Printf("Failed to rewrite configuration: %v", err)
 			}
 			if r.changes {
-				log.Printf("[ConfigHandler] Reconfiguring squid...")
+				logger.Printf("Reconfiguring squid...")
 				if err := reconfigureSquid(); err != nil {
-					log.Printf("[ConfigHandler] Error reconfiguring squid: %v", err)
+					logger.Printf("Error reconfiguring squid: %v", err)
 				}
 			}
 		}
@@ -103,7 +106,7 @@ func (r *rewriter) rewriteConfig() error {
 	}
 	if parents != r.lastParents || dnsServers != r.lastDnsServers {
 		// read template
-		b, err := ioutil.ReadFile(r.templatePath)
+		b, err := os.ReadFile(r.templatePath)
 		if err != nil {
 			return fmt.Errorf("failed to read template (%s): %w", r.templatePath, err)
 		}
@@ -114,7 +117,7 @@ func (r *rewriter) rewriteConfig() error {
 			conf = strings.Replace(conf, "${PARENTS}", parents, 1)
 		}
 		// write config
-		if err := ioutil.WriteFile(r.configPath, []byte(conf), 777); err != nil {
+		if err := os.WriteFile(r.configPath, []byte(conf), 777); err != nil {
 			return fmt.Errorf("failed to write config (%s): %w", r.configPath, err)
 		}
 		r.changes = true
@@ -169,12 +172,12 @@ func reconfigureSquid() error {
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start [%s]", cmd.String())
 	}
-	if slurp, err := ioutil.ReadAll(stdout); err != nil {
+	if slurp, err := io.ReadAll(stdout); err != nil {
 		return fmt.Errorf("failed to read standard out [%s]", cmd.String())
 	} else if len(slurp) > 0 {
 		log.Printf("%s", slurp)
 	}
-	if slurp, err := ioutil.ReadAll(stderr); err != nil {
+	if slurp, err := io.ReadAll(stderr); err != nil {
 		return fmt.Errorf("failed to read standard err [%s]", cmd.String())
 	} else if len(slurp) > 0 {
 		log.Printf("%s", slurp)

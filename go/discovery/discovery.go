@@ -3,12 +3,13 @@ package discovery
 import (
 	"context"
 	"fmt"
+	"os"
+	"time"
+
 	metaV1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"os"
-	"time"
 )
 
 type Discovery struct {
