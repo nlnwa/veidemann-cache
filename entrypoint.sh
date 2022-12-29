@@ -7,10 +7,7 @@
 # Create and initialize TLS certificates cache directory
 /usr/lib/squid/security_file_certgen -c -s /var/spool/squid/ssl_db -M 4MB
 # Set permissions to allow access by proxy user
-chown -R proxy:proxy /var/lib/ssl_db
-
-# mkdir -p /var/spool/squid
-# chown -R proxy:proxy /var/spool/squid
+chown -R proxy:proxy /var/spool/squid/ssl_db
 
 ulimit -n 65536
 
