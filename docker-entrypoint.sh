@@ -7,12 +7,12 @@ set -e
 SQUID_VERSION=$(/usr/sbin/squid -v | grep Version | awk '{ print $4 }')
 
 # Create and initialize TLS certificates cache directory
-sudo /usr/lib/squid/security_file_certgen -c -s /var/lib/ssl_db -M 4MB
+/usr/lib/squid/security_file_certgen -c -s /var/lib/ssl_db -M 4MB
 # Set permissions to allow access by squid
-sudo chown -R proxy:proxy /var/lib/ssl_db
+chown -R proxy:proxy /var/lib/ssl_db
 
 # Start confighandler daemon
-sudo confighandler "$@"
+confighandler "$@"
 
 
 # Create cache dir

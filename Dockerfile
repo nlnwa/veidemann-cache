@@ -41,8 +41,6 @@ COPY docker-entrypoint.sh /
 COPY squid.conf.template /etc/squid/
 COPY squid-balancer.conf.template /etc/squid/
 
-USER proxy
-
 ENV SERVICE_NAME="veidemann-cache"
 ENV DNS_SERVERS="8.8.8.8 8.8.4.4"
 

@@ -105,3 +105,6 @@ request_header_access veidemann_jeid deny all
 
 # visible_hostname ensures that X-Cache header always contains 'from veidemann_cache' after HIT/MISS
 visible_hostname veidemann_cache
+
+cache_effective_user proxy
+cache_effective_group proxy
