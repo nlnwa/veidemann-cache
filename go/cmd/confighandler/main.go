@@ -24,7 +24,7 @@ func main() {
 	flag.Parse()
 
 	// configure rewriter
-	r.configPath = "/etc/squid/squid.conf"
+	r.configPath = "/etc/squid/conf.d/veidemann.conf"
 	if r.balancer {
 		logger.Print("Configuring squid as balancer")
 		r.templatePath = "/etc/squid/squid-balancer.conf.template"
