@@ -3,48 +3,74 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/sevlyar/go-daemon"
-	"io/ioutil"
+	"io"
 	"log"
-	"nlnwa/veidemann-cache/go/discover"
-	"nlnwa/veidemann-cache/go/iputil"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/nlnwa/veidemann-cache/go/discovery"
+	"github.com/nlnwa/veidemann-cache/go/iputil"
+	"github.com/sevlyar/go-daemon"
 )
 
 func main() {
-	r := &rewriter{}
+	r := new(rewriter)
 
-	flag.BoolVar(&r.balancer, "b", false, "Set to true to make this node a non-caching load balancing node")
+	logger := log.New(os.Stderr, "[ConfigHandler] ", log.Ldate|log.Ltime|log.LUTC|log.Lmsgprefix)
+
+	flag.BoolVar(&r.balancer, "b", false, "Set to true to configure squid as balancer")
 	flag.Parse()
 
+	// configure rewriter
+	r.configPath = "/etc/squid/conf.d/veidemann.conf"
 	if r.balancer {
-		log.Print("Confighandler: Init squid as balancer")
-		r.discovery = discover.NewDiscovery()
+		logger.Print("Configuring squid as balancer")
+		r.templatePath = "/etc/squid/squid-balancer.conf.template"
+		if d, err := discovery.NewDiscovery(); err != nil {
+			logger.Fatalf("Failed to initialize discovery: %v", err)
+		} else {
+			r.discovery = d
+		}
 	} else {
-		log.Print("Confighandler: Init squid cache")
+		logger.Println("Configuring squid as cache")
+		r.templatePath = "/etc/squid/squid.conf.template"
 	}
-	r.check()
 
-	context := &daemon.Context{LogFileName: "/proc/self/fd/2"}
+	// initial config rewrite
+	// Note: this will run twice (both in the parent and the child process)
+	if err := r.rewriteConfig(); err != nil {
+		logger.Fatalf("Failed to initialize configuration: %v", err)
+	}
+
+	context := &daemon.Context{LogFileName: "/dev/stderr"}
 	child, err := context.Reborn()
 	if err != nil {
-		log.Fatal("Confighandler: Unable to run: ", err)
+		logger.Fatalf("Failed to create daemon process: %v", err)
 	}
 
 	if child != nil {
 		// This code is run in parent process
-		log.Printf("Confighandler: Init done")
-		return
+		logger.Printf("Configuration initialized (%s)", r.configPath)
 	} else {
 		// This code is run in forked child
-		defer context.Release()
-		log.Print("Confighandler: daemon started")
+		logger.Println("Daemon started")
+		defer func() {
+			_ = context.Release()
+			logger.Println("Daemon stopped")
+		}()
 		for {
-			r.check()
 			time.Sleep(5 * time.Second)
+			if err := r.rewriteConfig(); err != nil {
+				logger.Printf("Failed to rewrite configuration: %v", err)
+			}
+			if r.changes {
+				logger.Printf("Reconfiguring squid...")
+				if err := reconfigureSquid(); err != nil {
+					logger.Printf("Error reconfiguring squid: %v", err)
+				}
+			}
 		}
 	}
 }
@@ -52,33 +78,66 @@ func main() {
 type rewriter struct {
 	lastParents    string
 	lastDnsServers string
-	discovery      *discover.Discovery
+	discovery      *discovery.Discovery
 	balancer       bool
+	templatePath   string
+	configPath     string
+	changes        bool
 }
 
-func (r *rewriter) check() {
+func (r *rewriter) rewriteConfig() error {
+	r.changes = false
+
+	dnsServers := r.getDnsServersString()
+	if dnsServers == "" {
+		return fmt.Errorf("no dns servers configured")
+	}
+
 	parents := ""
 	if r.balancer {
-		parents = r.getParentsString()
+		var err error
+		parents, err = r.getParents()
+		if err != nil {
+			return fmt.Errorf("failed to get parents: %w", err)
+		}
+		if parents == "" {
+			return fmt.Errorf("found no parents")
+		}
 	}
-	dnsServers := r.getDnsServersString()
-
 	if parents != r.lastParents || dnsServers != r.lastDnsServers {
-		conf := r.rewriteConfig(dnsServers, parents)
-		r.writeConfig(conf)
+		// read template
+		b, err := os.ReadFile(r.templatePath)
+		if err != nil {
+			return fmt.Errorf("failed to read template (%s): %w", r.templatePath, err)
+		}
+		// substitute template variables
+		conf := string(b)
+		conf = strings.Replace(conf, "${DNS_IP}", dnsServers, 1)
+		if r.balancer {
+			conf = strings.Replace(conf, "${PARENTS}", parents, 1)
+		}
+		// write config
+		if err := os.WriteFile(r.configPath, []byte(conf), 777); err != nil {
+			return fmt.Errorf("failed to write config (%s): %w", r.configPath, err)
+		}
+		r.changes = true
 	}
 
 	r.lastParents = parents
 	r.lastDnsServers = dnsServers
+	return nil
 }
 
-func (r *rewriter) getParentsString() string {
-	s := r.discovery.GetSiblings()
-	var siblings string
-	for _, a := range s {
-		siblings += fmt.Sprintf("cache_peer %v parent 3128 0 carp no-digest\n", a)
+func (r *rewriter) getParents() (string, error) {
+	parents, err := r.discovery.GetParents()
+	if err != nil {
+		return "", err
 	}
-	return siblings
+	var peers string
+	for _, parent := range parents {
+		peers += fmt.Sprintf("cache_peer %v parent 3128 0 carp no-digest\n", parent)
+	}
+	return peers, nil
 }
 
 func (r *rewriter) getDnsServersString() string {
@@ -96,59 +155,36 @@ func (r *rewriter) getDnsServersString() string {
 	return dnsServers
 }
 
-func (r *rewriter) rewriteConfig(dnsServers string, parents string) string {
-	var templatePath string
-	if r.balancer {
-		templatePath = "/etc/squid/squid-balancer.conf.template"
-	} else {
-		templatePath = "/etc/squid/squid.conf.template"
-	}
-	b, err := ioutil.ReadFile(templatePath)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	conf := string(b)
-	conf = strings.Replace(conf, "${DNS_IP}", dnsServers, 1)
-	conf = strings.Replace(conf, "${PARENTS}", parents, 1)
-
-	return conf
-}
-
-func (r *rewriter) writeConfig(conf string) {
-	err := ioutil.WriteFile("/etc/squid/squid.conf", []byte(conf), 777)
-	if err != nil {
-		log.Print(err)
-	}
-
-	p, err := ioutil.ReadFile("/var/run/squid/squid.pid")
-	if err != nil {
-		log.Printf("Confighandler: No squid is running %v", err.Error())
-		return
-	}
-
-	log.Printf("Confighandler: Reloading squid config...")
-	cmd := exec.Command("kill", "-HUP", strings.Trim(string(p), " \n\r\t"))
+func reconfigureSquid() error {
+	cmd := exec.Command("squid", "-k", "reconfigure")
+	// ignore error returned if wait was already called
+	defer func() { _ = cmd.Wait() }()
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("failed to pipe stderr [%s]: %w", cmd.String(), err)
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("failed to pipe stdout [%s]: %w", cmd.String(), err)
 	}
 
 	if err := cmd.Start(); err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("failed to start [%s]", cmd.String())
 	}
-
-	slurp, _ := ioutil.ReadAll(stdout)
-	log.Printf("%s\n", slurp)
-	slurp, _ = ioutil.ReadAll(stderr)
-	log.Printf("%s\n", slurp)
+	if slurp, err := io.ReadAll(stdout); err != nil {
+		return fmt.Errorf("failed to read standard out [%s]", cmd.String())
+	} else if len(slurp) > 0 {
+		log.Printf("%s", slurp)
+	}
+	if slurp, err := io.ReadAll(stderr); err != nil {
+		return fmt.Errorf("failed to read standard err [%s]", cmd.String())
+	} else if len(slurp) > 0 {
+		log.Printf("%s", slurp)
+	}
 
 	if err := cmd.Wait(); err != nil {
-		log.Printf("Confighandler: Reloading squid config finished with error: %v", err)
+		return err
 	}
+	return nil
 }

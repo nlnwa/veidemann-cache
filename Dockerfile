@@ -1,55 +1,50 @@
-FROM golang:1.11
-COPY go /src
-WORKDIR /src
+FROM golang:1.19-alpine as helpers
 
-RUN CGO_ENABLED=0 go build -o confighandler cmd/confighandler/main.go
-RUN CGO_ENABLED=0 go build -o storeid cmd/storeid/main.go
-RUN CGO_ENABLED=0 go build -o loghelper cmd/loghelper/main.go
+WORKDIR /go/src/helpers
+
+COPY go/go.mod go/go.sum ./
+RUN go mod download
+
+COPY go ./
+RUN CGO_ENABLED=0 go install ./...
 
 
+FROM alpine:3.17 as certificates
 
-FROM alpine:3.9.2
+RUN apk add --no-cache gnutls-utils
 
-EXPOSE 3128 3129 4827
+COPY cert.cfg /
+RUN certtool --generate-privkey --outfile tls.key \
+    && certtool --generate-self-signed --load-privkey tls.key --template cert.cfg --outfile tls.crt
 
-RUN apk add --no-cache squid openssl ca-certificates sudo gettext iptables ip6tables iproute2 && rm -rf /var/cache/apk/*
 
+FROM debian:bullseye-20230109-slim
+
+ENV TZ=UTC
+ENV SERVICE_NAME="veidemann-cache"
 ENV DNS_SERVERS="8.8.8.8 8.8.4.4"
 
-COPY --from=0 /src/confighandler /usr/bin/
-COPY --from=0 /src/storeid /usr/bin/
-COPY --from=0 /src/loghelper /usr/bin/
-
-COPY openssl.conf /
-
-# Make a self-signed certificate to satisfy the requirements of the Squid config
-RUN mkdir /ca-certificates \
- && openssl ecparam -name prime256v1 -out /ca-certificates/ec.param \
- && openssl req -new -newkey ec:/ca-certificates/ec.param -days 1825 -nodes -x509 -sha384 \
-      -config openssl.conf \
-      -keyout /ca-certificates/cache-selfsigned.key \
-      -out /ca-certificates/cache-selfsignedCA.crt \
-      -subj "/O=Veidemann harvester/OU=Veidemann cache/CN=veidemann-harvester" \
- && chmod -R 777 /ca-certificates
-
-RUN echo "Cmnd_Alias CMDS = /init-squid.sh, /usr/bin/confighandler" >> /etc/sudoers.d/squid && \
-    echo "squid ALL=(ALL) NOPASSWD: CMDS" >> /etc/sudoers.d/squid && \
-    echo "Defaults:squid !requiretty, !env_reset" >> /etc/sudoers.d/squid && \
-    chmod 440 /etc/sudoers.d/squid
+RUN set -eux; \
+    apt-get update; \
+    DEBIAN_FRONTEND=noninteractive apt-get full-upgrade -y; \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends squid-openssl ca-certificates tzdata; \
+    DEBIAN_FRONTEND=noninteractive apt-get remove --purge --auto-remove -y; \
+    rm -rf /var/lib/apt/lists/*; \
+    sed -i 's/^#http_access allow localnet$/http_access allow localnet/' /etc/squid/conf.d/debian.conf; \
+    echo "# Set max_filedescriptors to avoid using system's RLIMIT_NOFILE. See LP: #1978272" > /etc/squid/conf.d/rock.conf; \
+    echo 'max_filedescriptors 65536' >> /etc/squid/conf.d/rock.conf; \
+    /usr/sbin/squid --version;
 
 # Use this mount to bring your own certificates
 VOLUME /ca-certificates
+VOLUME /var/spool/squid
 
-VOLUME /var/cache/squid
+COPY --from=helpers /go/bin/confighandler /go/bin/storeid /go/bin/loghelper /usr/local/sbin/
+COPY --from=certificates --chown=proxy:proxy /tls.key /tls.crt /ca-certificates/
+ADD https://ssl-config.mozilla.org/ffdhe2048.txt /ca-certificates/dhparams.pem
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY squid.conf squid.conf.template squid-balancer.conf.template /etc/squid/
 
-COPY init-squid.sh /
-COPY docker-entrypoint.sh /
-COPY squid.conf /etc/squid/squid.conf.template
-COPY squid-balancer.conf /etc/squid/squid-balancer.conf.template
+EXPOSE 3128
 
-USER squid
-
-ENV SERVICE_NAME="veidemann-cache"
-
-ENTRYPOINT [ "/docker-entrypoint.sh" ]
-CMD [ "squid" ]
+ENTRYPOINT [ "entrypoint.sh"]
